@@ -1,0 +1,2 @@
+# rich
+Get Rich.
