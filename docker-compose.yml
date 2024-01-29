@@ -1,0 +1,234 @@
+###
+# Rich Service docker compose
+###
+version: "4"
+
+services:
+  # Metric Scrapper: Prometheus
+  prometheus:
+    image: prom/prometheus:v2.45.0
+    container_name: prometheus
+    user: root
+    volumes:
+      - ./prometheus/:/etc/prometheus/
+      - /srv/data.vol/prometheus_data:/prometheus
+      - /etc/localtime:/etc/localtime:ro
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yaml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.max-block-duration=2h'
+      - '--storage.tsdb.min-block-duration=2h'
+      - '--storage.tsdb.retention.time=1y'
+      - '--web.enable-lifecycle'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    ports:
+      - "9090:9090"
+    restart: always
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 150m
+    labels:
+      org.label-schema.group: "monitoring"
+
+  # Metric Scrapper: Pushgateway
+  pushgateway:
+    image: prom/pushgateway:v1.5.0
+    container_name: pushgateway
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - "9091:9091"
+    restart: always
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 150m
+    labels:
+      org.label-schema.group: "monitoring"
+    depends_on:
+      - prometheus
+
+  grafana_db:
+    image: mysql:latest
+    container_name: grafana_db
+    restart: always
+    environment:
+      MYSQL_DATABASE: grafana
+      MYSQL_ROOT_PASSWORD: 6lB9FrdnUzzk1FK+
+    volumes:
+      - /srv/data.vol/grafana_db:/var/lib/mysql
+    ports:
+      - "127.0.0.1:3306:3306"
+
+  grafana:
+    image: jfrog.prod.snpx.dev/docker/grafana/grafana:10.1.6
+    container_name: grafana
+    volumes:
+      - /srv/data.vol/grafana_data:/var/lib/grafana
+      - ./grafana/provisioning/:/etc/grafana/provisioning/
+      - /etc/localtime:/etc/localtime:ro
+      - ./grafana/conf/:/opt/grafana/
+    user: root
+    depends_on:
+      - prometheus
+      - grafana_db
+      - pushgateway
+    env_file:
+      - ./grafana/config.monitoring
+    ports:
+      - "3000:3000"
+    restart: always
+    labels:
+      org.label-schema.group: "monitoring"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # Let's Keep prometheus data longer.
+  thanos-sidecar-1:
+    image: quay.io/thanos/thanos:v0.31.0
+    volumes:
+      - ./thanos/:/etc/thanos/
+      - /srv/data.vol/prometheus_data:/prometheus
+    command:
+      - 'sidecar'
+      - '--tsdb.path=/prometheus'
+      - '--prometheus.url=http://prometheus:9090'
+      - '--grpc-address=0.0.0.0:10091'
+      - '--http-address=0.0.0.0:10902'
+      - '--objstore.config-file=/etc/thanos/bucket_config.yaml'
+    ports:
+      - "10905:10902"
+    depends_on:
+      - prometheus
+      - minio
+    restart: always
+
+  thanos-querier:
+    image: quay.io/thanos/thanos:v0.31.0
+    command:
+      - 'query'
+      - '--grpc-address=0.0.0.0:10091'
+      - '--http-address=0.0.0.0:10902'
+      - '--query.replica-label=replica'
+      - '--store=thanos-sidecar-1:10091'
+      - '--store=thanos-store-gateway:10091'
+    ports:
+      - 10902:10902
+    restart: always
+
+  thanos-query-frontend:
+    image: quay.io/thanos/thanos:v0.26.0
+    container_name: thanos-query-frontend
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+    command:
+      - 'query-frontend'
+      - '--http-address=0.0.0.0:10901'
+      - '--query-frontend.downstream-url=http://thanos-querier:10902'
+      - "--query-frontend.compress-responses"
+      - "--query-range.partial-response"
+      - "--query-range.split-interval=24h"
+      - "--query-range.max-retries-per-request=5"
+      - "--query-frontend.log-queries-longer-than=5s"
+      - "--cache-compression-type=snappy"
+    ports:
+      - 10901:10901
+    depends_on:
+      - thanos-querier
+    restart: always
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 150m
+    labels:
+      org.label-schema.group: "monitoring"
+
+  thanos-store-gateway:
+    image: quay.io/thanos/thanos:v0.31.0
+    volumes:
+      - ./thanos/:/etc/thanos/
+    command:
+      - 'store'
+      - '--grpc-address=0.0.0.0:10091'
+      - '--http-address=0.0.0.0:10902'
+      - '--data-dir=/tmp/thanos/store'
+      - '--objstore.config-file=/etc/thanos/bucket_config.yaml'
+    depends_on:
+      - minio
+    restart: always
+
+  thanos-compactor:
+    image: quay.io/thanos/thanos:v0.31.0
+    volumes:
+      - ./thanos/:/etc/thanos/
+    command:
+      - "compact"
+      - "--wait"
+      - "--log.level=info"
+      - "--log.format=logfmt"
+      - '--objstore.config-file=/etc/thanos/bucket_config.yaml'
+      - "--data-dir=/var/thanos/compact"
+      - "--debug.accept-malformed-index"
+      - "--retention.resolution-raw=90d"   # Keep raw data for 3 months (90 days)
+      - "--retention.resolution-5m=365d"  # Keep 5-minute resolution data for 1 year (365 days)
+      - "--retention.resolution-1h=365d"  # Keep 1-hour resolution data for 1 year (365 days)
+      - "--delete-delay=48h"
+      - "--compact.concurrency=1"
+      - "--downsample.concurrency=1"
+      - "--downsampling.disable"
+      - "--deduplication.replica-label=prometheus_replica"
+      - "--deduplication.replica-label=rule_replica"
+    depends_on:
+      - minio
+    restart: always
+
+  thanos-bucket-web:
+    image: quay.io/thanos/thanos:v0.31.0
+    volumes:
+      - ./thanos/:/etc/thanos/
+    command:
+      - 'tools'
+      - 'bucket'
+      - 'web'
+      - '--http-address=0.0.0.0:10902'
+      - '--log.level=debug'
+      - '--objstore.config-file=/etc/thanos/bucket_config.yaml'
+      - '--refresh=5m'
+      - '--timeout=2m'
+      - '--label=replica'
+    ports:
+      - 10904:10902
+    depends_on:
+      - minio
+    restart: always
+
+  minio:
+    image: minio/minio:RELEASE.2022-06-07T00-33-41Z
+    container_name: minio
+    volumes:
+      - /srv/data.vol/minio_data:/data
+      - /etc/localtime:/etc/localtime:ro
+      - /var/ramdisk:/var/ramdisk
+    entrypoint: [""]
+    command: ["sh", "-c", 'mkdir -p /data/demo-bucket  && minio server /data ']
+    environment:
+      - MINIO_ACCESS_KEY=mimir
+      - MINIO_SECRET_KEY=supersecret
+      - MINIO_PROMETHEUS_AUTH_TYPE=public
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    restart: always
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 150m
+    labels:
+      org.label-schema.group: "monitoring"
+

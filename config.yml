@@ -1,0 +1,26 @@
+###
+# Rich config File
+###
+
+
+general:
+  interval_seconds: 5
+
+analyzer:
+
+gather:
+  - wallex_usdt_toman:
+      module: wallex.usdt_toman
+
+  - wallex_btc_toman:
+      module: wallex.btc_toman
+
+  - exbito_usdt_toman:
+      module: exbito.usdt_toman
+
+
+prometheus:
+  http:
+    host: 0.0.0.0
+    port: 5580
+

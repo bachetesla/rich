@@ -1,0 +1,21 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+  external_labels:
+    cluster: 'Rich-Prometheus'
+
+###################################################
+#### SCRAPE CONFIGS
+###################################################
+scrape_configs:
+  ###################################################
+  #### Prometheus
+  ###################################################
+  - job_name: 'rich-prometheus'
+    static_configs:
+      - targets: [ 'localhost:9090' ]
+
+  - job_name: 'rich'
+    static_configs:
+      - targets: ['172.30.201.224:5580']
