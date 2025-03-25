@@ -11,7 +11,7 @@ services:
     user: root
     volumes:
       - ./prometheus/:/etc/prometheus/
-      - /srv/data.vol/prometheus_data:/prometheus
+      - ./srv/data.vol/prometheus_data:/prometheus
       - /etc/localtime:/etc/localtime:ro
     command:
       - '--config.file=/etc/prometheus/prometheus.yaml'
@@ -60,7 +60,7 @@ services:
       MYSQL_DATABASE: grafana
       MYSQL_ROOT_PASSWORD: 6lB9FrdnUzzk1FK+
     volumes:
-      - /srv/data.vol/grafana_db:/var/lib/mysql
+      - ./srv/data.vol/grafana_db:/var/lib/mysql
     ports:
       - "127.0.0.1:3306:3306"
 
@@ -68,7 +68,7 @@ services:
     image: docker.arvancloud.ir/grafana/grafana:10.1.6
     container_name: grafana
     volumes:
-      - /srv/data.vol/grafana_data:/var/lib/grafana
+      - ./srv/data.vol/grafana_data:/var/lib/grafana
       - ./grafana/provisioning/:/etc/grafana/provisioning/
       - /etc/localtime:/etc/localtime:ro
       - ./grafana/conf/:/opt/grafana/
@@ -92,7 +92,7 @@ services:
     image: quay.io/thanos/thanos:v0.31.0
     volumes:
       - ./thanos/:/etc/thanos/
-      - /srv/data.vol/prometheus_data:/prometheus
+      - ./srv/data.vol/prometheus_data:/prometheus
     command:
       - 'sidecar'
       - '--tsdb.path=/prometheus'
@@ -211,7 +211,7 @@ services:
     image: docker.arvancloud.ir/minio/minio:RELEASE.2022-06-07T00-33-41Z
     container_name: minio
     volumes:
-      - /srv/data.vol/minio_data:/data
+      - ./srv/data.vol/minio_data:/data
       - /etc/localtime:/etc/localtime:ro
       - /var/ramdisk:/var/ramdisk
     entrypoint: [""]
