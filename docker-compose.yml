@@ -6,7 +6,7 @@ version: "4"
 services:
   # Metric Scrapper: Prometheus
   prometheus:
-    image: prom/prometheus:v2.45.0
+    image: docker.arvancloud.ir/prom/prometheus:v2.45.0
     container_name: prometheus
     user: root
     volumes:
@@ -35,7 +35,7 @@ services:
 
   # Metric Scrapper: Pushgateway
   pushgateway:
-    image: prom/pushgateway:v1.5.0
+    image: docker.arvancloud.ir/prom/pushgateway:v1.5.0
     container_name: pushgateway
     volumes:
       - /etc/localtime:/etc/localtime:ro
@@ -53,7 +53,7 @@ services:
       - prometheus
 
   grafana_db:
-    image: mysql:latest
+    image: docker.arvancloud.ir/mysql:latest
     container_name: grafana_db
     restart: always
     environment:
@@ -65,7 +65,7 @@ services:
       - "127.0.0.1:3306:3306"
 
   grafana:
-    image: grafana/grafana:10.1.6
+    image: docker.arvancloud.ir/grafana/grafana:10.1.6
     container_name: grafana
     volumes:
       - /srv/data.vol/grafana_data:/var/lib/grafana
@@ -208,7 +208,7 @@ services:
     restart: always
 
   minio:
-    image: minio/minio:RELEASE.2022-06-07T00-33-41Z
+    image: docker.arvancloud.ir/minio/minio:RELEASE.2022-06-07T00-33-41Z
     container_name: minio
     volumes:
       - /srv/data.vol/minio_data:/data
