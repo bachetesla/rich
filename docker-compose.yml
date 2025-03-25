@@ -65,7 +65,7 @@ services:
       - "127.0.0.1:3306:3306"
 
   grafana:
-    image: jfrog.prod.snpx.dev/docker/grafana/grafana:10.1.6
+    image: grafana/grafana:10.1.6
     container_name: grafana
     volumes:
       - /srv/data.vol/grafana_data:/var/lib/grafana
