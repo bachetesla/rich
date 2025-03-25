@@ -32,6 +32,8 @@ services:
         max-size: 150m
     labels:
       org.label-schema.group: "monitoring"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   # Metric Scrapper: Pushgateway
   pushgateway:

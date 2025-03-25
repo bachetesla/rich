@@ -18,4 +18,4 @@ scrape_configs:
 
   - job_name: 'rich'
     static_configs:
-      - targets: ['172.30.201.224:5580']
+      - targets: ['host.docker.internal:5580']
